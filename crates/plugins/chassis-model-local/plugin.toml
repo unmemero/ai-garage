@@ -1,0 +1,22 @@
+[plugin]
+id = "chassis.model.local"
+name = "Local Llama Model Adapter"
+version = "1.0.0"
+description = "Connects to local llama-server on port 8080 with mock fallback"
+author = "Sovereign AI Core Team"
+license = "MIT"
+
+[entrypoint]
+runtime = "native"
+executable = "./chassis-model-local"
+args = []
+env_passthrough = ["LLAMA_ENDPOINT", "LLAMA_API_KEY"]
+
+[[capabilities_offered]]
+id = "model.generate"
+version = "1.0.0"
+methods = ["generate"]
+
+[permissions.network]
+allow_outbound = true
+allowed_domains = ["localhost", "127.0.0.1", "0.0.0.0"]

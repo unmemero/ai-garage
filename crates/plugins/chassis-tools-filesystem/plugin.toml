@@ -1,0 +1,22 @@
+[plugin]
+id = "chassis.tools.filesystem"
+name = "Filesystem Tools"
+version = "1.0.0"
+description = "Sandboxed workspace file reading, writing, and directory listing"
+author = "Sovereign AI Core Team"
+license = "MIT"
+
+[entrypoint]
+runtime = "native"
+executable = "./chassis-tools-filesystem"
+args = []
+env_passthrough = []
+
+[[capabilities_offered]]
+id = "tools.execute"
+version = "1.0.0"
+methods = ["file_read", "file_write", "list_dir"]
+
+[permissions.filesystem]
+read_scopes = ["workspace"]
+write_scopes = ["workspace"]

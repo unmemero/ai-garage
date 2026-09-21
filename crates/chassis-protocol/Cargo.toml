@@ -1,0 +1,12 @@
+[package]
+name = "chassis-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Core protocol types and JSON-RPC 2.0 NDJSON wire framing for the Chassis microkernel"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
