@@ -443,6 +443,28 @@ async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn 
         println!("   ✓ Filesystem tools response received: {}", fs_resp.result.unwrap_or_default());
     }
 
+    // 3. Storage conversation invocation
+    let storage_req = InvokeRequest::new(
+        "req_storage_001",
+        "storage.conversation",
+        "conversation_create",
+        json!({
+            "id": format!("conv_{session_id}"),
+            "title": "Sovereign E2E Self-Test Session",
+            "model_id": "chassis.model.local",
+            "chassis_session_id": session_id
+        }),
+    );
+
+    wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "storage.conversation", "method": "conversation_create" }))?;
+    let storage_resp = router.dispatch("agent_core", storage_req).await?;
+    wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": storage_resp }))?;
+    if let Some(err) = storage_resp.error {
+        println!("   ⚠️ Storage conversation status: {}", err.message);
+    } else {
+        println!("   ✓ Storage conversation created: {}", storage_resp.result.unwrap_or_default());
+    }
+
     wal.append("SESSION_END", json!({ "status": "clean_exit", "booted_plugins": booted_count }))?;
     println!("\n🏁 Microkernel session finished successfully. WAL event chain fully flushed.");
     Ok(())
