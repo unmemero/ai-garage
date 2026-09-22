@@ -1,0 +1,31 @@
+[plugin]
+id = "chassis.storage.sqlite"
+name = "SQLite Conversation Storage"
+version = "1.0.0"
+description = "Sovereign UI conversation storage and semantic memory engine with libSQL vector search"
+author = "Sovereign AI Core Team"
+license = "MIT"
+
+[entrypoint]
+runtime = "native"
+executable = "./chassis-storage-sqlite"
+args = []
+env_passthrough = ["CHASSIS_STORAGE_PATH", "CHASSIS_STORAGE_DIMENSIONS"]
+
+[[capabilities_offered]]
+id = "storage.conversation"
+version = "1.0.0"
+methods = [
+    "conversation_create",
+    "conversation_get",
+    "conversation_list",
+    "conversation_update_title",
+    "conversation_delete",
+    "message_append",
+    "message_get_history",
+    "message_search_similar",
+]
+
+[permissions.filesystem]
+read_scopes = ["workspace"]
+write_scopes = ["workspace"]

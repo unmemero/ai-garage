@@ -1305,7 +1305,7 @@ In `chassis-model-local`:
 
 ---
 
-## 15. UI Conversation Storage & Semantic Memory (`crates/chassis-storage`)
+## 15. UI Conversation Storage & Semantic Memory Plugin (`crates/plugins/chassis-storage-sqlite`)
 
 Chassis integrates a native, embedded SQLite-compatible storage engine backed by **libSQL (Turso)** for managing user conversations, interaction turns, and semantic memory.
 

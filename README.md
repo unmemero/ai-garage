@@ -28,7 +28,7 @@ Monolithic AI agent frameworks bundle assumptions, unsafe default host permissio
   - Recursive `/proc/[0-9]*/stat` parent-process-ID tree parsing (`collect_descendants`) discovers all descendant processes.
   - `kill_process_tree` issues process group kill (`killpg`), targeted `SIGKILL` to all descendants, and non-blocking zombie reaping (`waitpid WNOHANG`).
 * 🔌 **Interchangeable Local & Cloud Model Adapters**: Native integration with local OpenAI-compatible inference servers (`llama-server`, Ollama, vLLM) with tight 500ms connection timeouts and hermetic mock fallback simulation.
-* 🧠 **Native Vector Search & Conversation Storage (`chassis-storage`)**: Embedded SQLite engine powered by **libSQL (Turso)**. Features native Approximate Nearest Neighbor (ANN) cosine similarity search (`libsql_vector_idx`, `vector_top_k`) for message embeddings and semantic recall without external vector DB daemons.
+* 🧠 **Native Vector Search & Conversation Storage (`chassis-storage-sqlite`)**: Sovereign plugin engine powered by **libSQL (Turso)**. Features native Approximate Nearest Neighbor (ANN) cosine similarity search (`libsql_vector_idx`, `vector_top_k`) for message embeddings and semantic recall without external vector DB daemons.
 
 ---
 
@@ -40,10 +40,10 @@ ai-garage/
 │   ├── chassis-protocol/         # Universal capability envelope, JSON-RPC 2.0 NDJSON types & error codes
 │   ├── chassis-core/             # Microkernel runtime, capability router, WAL, vault, subagent, & supervisor
 │   ├── chassis-cli/              # Sovereign command-line host binary (`chassis`)
-│   ├── chassis-storage/          # Embedded libSQL conversation database & native vector search engine
 │   └── plugins/
 │       ├── chassis-model-local/  # Local model adapter (OpenAI-compatible / llama-server)
-│       └── chassis-tools-filesystem/ # Sandboxed workspace filesystem provider
+│       ├── chassis-tools-filesystem/ # Sandboxed workspace filesystem provider
+│       └── chassis-storage-sqlite/   # Sovereign libSQL conversation & vector memory plugin
 ├── docs/
 │   ├── DESIGN_LOG.md             # In-depth architectural specifications and state machines
 │   └── DECISION_LOG.md           # Formal Architecture Decision Records (ADR-001 through ADR-031)
@@ -137,7 +137,7 @@ make ready
 ```
 
 1. **Build Gate**: Checks compilation across all workspace crates and targets.
-2. **Test Gate**: Runs 37 unit, integration, and stress tests.
+2. **Test Gate**: Runs 38 unit, integration, and stress tests.
 3. **Lint Gate**: Strict Clippy analysis (`-D warnings`).
 4. **Security Audit Gate**: Scans all 220 crate dependencies against the [RustSec Advisory Database](https://rustsec.org/) (Snyk equivalent) for known CVEs.
 

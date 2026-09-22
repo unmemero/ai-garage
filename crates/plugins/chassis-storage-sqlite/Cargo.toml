@@ -1,5 +1,5 @@
 [package]
-name = "chassis-storage"
+name = "chassis-storage-sqlite"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Sovereign UI conversation storage and semantic memory engine with libSQL vector search"
 
 [dependencies]
+chassis-protocol = { path = "../../chassis-protocol" }
 libsql.workspace = true
 tokio.workspace = true
 serde.workspace = true

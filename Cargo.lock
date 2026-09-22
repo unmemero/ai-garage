@@ -207,9 +207,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "chassis-storage"
+name = "chassis-storage-sqlite"
 version = "0.1.0"
 dependencies = [
+ "chassis-protocol",
  "chrono",
  "libsql",
  "serde",

@@ -1,4 +1,4 @@
-use chassis_storage::{ConversationStore, Role, StorageConfig};
+use chassis_storage_sqlite::{ConversationStore, Role, StorageConfig};
 use serde_json::json;
 use tempfile::tempdir;
 
