@@ -1,0 +1,20 @@
+[package]
+name = "chassis-storage"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Sovereign UI conversation storage and semantic memory engine with libSQL vector search"
+
+[dependencies]
+libsql.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3.17"

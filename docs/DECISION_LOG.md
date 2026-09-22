@@ -288,6 +288,16 @@ This log records all foundational architectural and design decisions for the sov
   * *Pros*: Completely eliminates zombie and orphaned background processes; guaranteed 100% process tree clean-up.
   * *Cons*: Relies on Linux `/proc` filesystem and POSIX signaling; non-Unix fallback uses process handle termination.
 
+---
+
+### [ADR-031] UI Conversation Storage & Semantic Memory via libSQL Native Vector Search
+* **Status**: Accepted
+* **Context**: UI frontends (web, desktop/Tauri, CLI) require persistent storage for chat threads, message histories, and semantic similarity search across past turns. Traditional vector databases (Pinecone, Qdrant, Chroma) introduce external daemon dependencies, cloud costs, or heavy native C extension builds (`sqlite-vss`).
+* **Decision**: Implement `chassis-storage` using **libSQL (Turso)** as an embedded, zero-daemon SQLite storage engine. libSQL provides native vector columns (`F32_BLOB(dim)`), Approximate Nearest Neighbor indexing (`libsql_vector_idx(embedding, 'metric=cosine')`), and top-k vector searches (`vector_top_k(...)`) directly in SQL. Furthermore, conversation records link to `chassis_session_id` and messages link to `wal_seq`, providing end-to-end traceability to the cryptographic Write-Ahead Log.
+* **Consequences**:
+  * *Pros*: 100% local, self-contained single `.db` file; native vector search without C extensions or daemon processes; full SQLite compatibility; optional remote replication to Turso Cloud if desired.
+
+
 
 
 

@@ -1303,6 +1303,68 @@ In `chassis-model-local`:
   3. Executes a non-blocking `waitpid(-1, &mut status, WNOHANG)` loop to reap all child and adopted grandchild zombies.
 * **Guaranteed Zero Zombies**: Proved empirically by `test_stress_descendant_process_tree_reaping`, with zero leaked child or grandchild processes remaining in `/proc`.
 
+---
+
+## 15. UI Conversation Storage & Semantic Memory (`crates/chassis-storage`)
+
+Chassis integrates a native, embedded SQLite-compatible storage engine backed by **libSQL (Turso)** for managing user conversations, interaction turns, and semantic memory.
+
+### 1. Database Architecture & Schema
+* **Local & Embedded**: Operates on a standard local database file (`.chassis/storage/conversations.db`) or in-memory (`:memory:`) with zero external daemon processes.
+* **Conversations**:
+  ```sql
+  CREATE TABLE conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      system_prompt TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      chassis_session_id TEXT, -- Foreign session ID linking to cryptographic WAL ledger
+      metadata JSON NOT NULL DEFAULT '{}'
+  );
+  ```
+* **Messages**:
+  ```sql
+  CREATE TABLE messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      role TEXT NOT NULL, -- 'user', 'assistant', 'system', 'tool'
+      content TEXT NOT NULL,
+      token_count INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      wal_seq INTEGER,    -- Sequence number in session WAL for auditability
+      metadata JSON NOT NULL DEFAULT '{}'
+  );
+  ```
+* **Message Embeddings & Native Vector Search**:
+  ```sql
+  CREATE TABLE message_embeddings (
+      message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL,
+      embedding F32_BLOB(384) -- Configurable dimensions (e.g. 384, 768, 1536)
+  );
+
+  CREATE INDEX idx_message_embeddings_vec 
+  ON message_embeddings (libsql_vector_idx(embedding, 'metric=cosine'));
+  ```
+
+### 2. Semantic Memory Query Pattern
+Approximate Nearest Neighbor (ANN) search retrieves top-k relevant past messages across conversations or within a single thread using native cosine similarity:
+```sql
+SELECT m.id, m.conversation_id, m.role, m.content, m.token_count, m.created_at, m.wal_seq, m.metadata,
+       vector_distance_cos(me.embedding, vector(?)) AS distance
+FROM vector_top_k('idx_message_embeddings_vec', vector(?), ?) AS top
+JOIN message_embeddings me ON me.rowid = top.id
+JOIN messages m ON m.id = me.message_id
+WHERE (? IS NULL OR me.conversation_id = ?)
+ORDER BY distance ASC;
+```
+
+### 3. Sovereign WAL Auditability
+Every conversation can be bound to a `chassis_session_id`, and every message turn can record its `wal_seq`. A UI frontend can present an "Audit Proof" badge that cross-references the conversation with the exact cryptographic forward-hash chain in the microkernel's Write-Ahead Log.
+
+
 
 
 
