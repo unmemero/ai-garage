@@ -337,27 +337,22 @@ async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn 
 
     let router = CapabilityRouter::new(policy.clone(), workspace, blob_store, exec_mode, None);
 
-    // Locate plugin manifests and executables
+    // Dynamically locate plugin manifests across:
+    // 1. In-tree development plugins: <workspace>/crates/plugins/*/plugin.toml
+    // 2. Installed workspace plugins: <workspace>/.chassis/plugins/*/plugin.toml
     let mut plugins_to_boot = Vec::new();
+    let search_roots = [
+        workspace.join("crates/plugins"),
+        chassis_dir.join("plugins"),
+    ];
 
-    // Check workspace crates/plugins
-    let model_manifest_path = workspace.join("crates/plugins/chassis-model-local/plugin.toml");
-    if model_manifest_path.exists() {
-        plugins_to_boot.push(model_manifest_path);
-    }
-
-    let fs_manifest_path = workspace.join("crates/plugins/chassis-tools-filesystem/plugin.toml");
-    if fs_manifest_path.exists() {
-        plugins_to_boot.push(fs_manifest_path);
-    }
-
-    // Also scan .chassis/plugins/
-    let installed_plugins = chassis_dir.join("plugins");
-    if let Ok(entries) = fs::read_dir(&installed_plugins) {
-        for entry in entries.flatten() {
-            let manifest_cand = entry.path().join("plugin.toml");
-            if manifest_cand.exists() {
-                plugins_to_boot.push(manifest_cand);
+    for root in &search_roots {
+        if let Ok(entries) = fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let manifest_cand = entry.path().join("plugin.toml");
+                if manifest_cand.is_file() && !plugins_to_boot.contains(&manifest_cand) {
+                    plugins_to_boot.push(manifest_cand);
+                }
             }
         }
     }
