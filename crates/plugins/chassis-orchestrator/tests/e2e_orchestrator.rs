@@ -80,7 +80,25 @@ async fn test_orchestrator_react_goal_loop_e2e() {
     .expect("Failed to launch model adapter");
     router.register_plugin(model_sup).await;
 
-    // 3. Boot chassis-orchestrator
+    // 3. Boot chassis-tools-websearch
+    let search_dir = root_dir.join("crates/plugins/chassis-tools-websearch");
+    let search_manifest_str = std::fs::read_to_string(search_dir.join("plugin.toml")).unwrap();
+    let search_manifest = PluginManifest::from_toml(&search_manifest_str).unwrap();
+    let search_sup = PluginSupervisor::launch_and_handshake_full(
+        search_manifest,
+        &policy,
+        &workspace,
+        &search_dir,
+        "test_orch_session",
+        Duration::from_secs(5),
+        None,
+        Some(reverse_tx.clone()),
+    )
+    .await
+    .expect("Failed to launch websearch tool");
+    router.register_plugin(search_sup).await;
+
+    // 4. Boot chassis-orchestrator
     let orch_dir = root_dir.join("crates/plugins/chassis-orchestrator");
     let orch_manifest_str = std::fs::read_to_string(orch_dir.join("plugin.toml")).unwrap();
     let orch_manifest = PluginManifest::from_toml(&orch_manifest_str).unwrap();
@@ -174,4 +192,27 @@ async fn test_orchestrator_react_goal_loop_e2e() {
         unauth_resp.error.is_some(),
         "Microkernel must reject undeclared capability invocation"
     );
+
+    // 7. Dispatch RAG web search goal
+    let search_goal_req = InvokeRequest::new(
+        "test_search_goal_001",
+        "agent.orchestrate",
+        "run_goal",
+        json!({
+            "goal": "Search web for Rust Tokio async runtime documentation",
+            "max_steps": 2
+        }),
+    );
+
+    let search_goal_resp = router
+        .dispatch("cli", search_goal_req)
+        .await
+        .expect("Search goal dispatch failed");
+    assert!(search_goal_resp.error.is_none());
+    let search_res = search_goal_resp.result.expect("Expected result payload");
+    assert_eq!(search_res.get("status").and_then(|s| s.as_str()), Some("completed"));
+    let search_hist = search_res.get("history").and_then(|h| h.as_array()).expect("History array");
+    assert!(!search_hist.is_empty());
+    let step1_act = search_hist[0].get("action").expect("Expected step action");
+    assert_eq!(step1_act.get("capability").and_then(|c| c.as_str()), Some("tools.search"));
 }

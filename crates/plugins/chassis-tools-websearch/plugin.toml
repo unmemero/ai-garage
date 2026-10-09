@@ -1,0 +1,28 @@
+[plugin]
+id = "chassis.tools.websearch"
+name = "Free Web Search & RAG Retrieval Tool"
+version = "1.0.0"
+description = "Free web search and information retrieval engine (DuckDuckGo & Wikipedia) for RAG agent workflows"
+author = "Sovereign AI Core Team"
+license = "MIT"
+
+[entrypoint]
+runtime = "native"
+executable = "./chassis-tools-websearch"
+args = []
+env_passthrough = []
+
+[[capabilities_offered]]
+id = "tools.search"
+version = "1.0.0"
+methods = ["web_search", "fetch_page"]
+
+[permissions.network]
+allow_outbound = true
+allowed_domains = [
+    "api.duckduckgo.com",
+    "html.duckduckgo.com",
+    "duckduckgo.com",
+    "en.wikipedia.org",
+    "wikipedia.org",
+]

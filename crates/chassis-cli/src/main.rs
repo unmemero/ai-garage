@@ -176,7 +176,7 @@ forbidden_patterns = ["**/.git/**", "**/.env*", "**/secrets/**"]
 
 [network]
 mode = "whitelist_only"
-global_allowed_domains = ["localhost", "127.0.0.1", "0.0.0.0"]
+global_allowed_domains = ["localhost", "127.0.0.1", "0.0.0.0", "api.duckduckgo.com", "html.duckduckgo.com", "duckduckgo.com", "en.wikipedia.org", "wikipedia.org"]
 blacklisted_domains = []
 
 [human_in_the_loop]

@@ -126,6 +126,11 @@ async fn handle_request(req: &Request, orch: &AgentOrchestrator) -> Response {
                         optional: true,
                         constraints: None,
                     },
+                    CapabilityRequirement {
+                        id: "tools.search".to_string(),
+                        optional: true,
+                        constraints: None,
+                    },
                 ],
                 hooks_subscribed: vec![],
             };

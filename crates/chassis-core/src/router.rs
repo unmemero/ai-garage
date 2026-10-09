@@ -150,8 +150,16 @@ impl CapabilityRouter {
         }
 
         // Network operations
-        if let Some(domain_val) = request.payload.get("domain").and_then(|v| v.as_str()) {
-            if let Err(e) = lease.validate_network(domain_val) {
+        let domain_candidate = request.payload.get("domain").and_then(|v| v.as_str()).or_else(|| {
+            request.payload.get("url").and_then(|v| v.as_str()).and_then(|u| {
+                let without_proto = u.split("://").nth(1).unwrap_or(u);
+                without_proto.split('/').next()
+            })
+        });
+
+        if let Some(domain_val) = domain_candidate {
+            let host_only = domain_val.split(':').next().unwrap_or(domain_val);
+            if let Err(e) = lease.validate_network(host_only) {
                 return Ok(Response::error(
                     request.call_id.clone(),
                     RpcError::from(e),

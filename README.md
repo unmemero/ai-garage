@@ -29,6 +29,7 @@ Monolithic AI agent frameworks bundle assumptions, unsafe default host permissio
   - `kill_process_tree` issues process group kill (`killpg`), targeted `SIGKILL` to all descendants, and non-blocking zombie reaping (`waitpid WNOHANG`).
 * 🔌 **Interchangeable Local & Cloud Model Adapters**: Native integration with local OpenAI-compatible inference servers (`llama-server`, Ollama, vLLM) with tight 500ms connection timeouts and hermetic mock fallback simulation.
 * 🧠 **Native Vector Search & Conversation Storage (`chassis-storage-sqlite`)**: Sovereign plugin engine powered by **libSQL (Turso)**. Features native Approximate Nearest Neighbor (ANN) cosine similarity search (`libsql_vector_idx`, `vector_top_k`) for message embeddings and semantic recall without external vector DB daemons.
+* 🌐 **Sovereign Web Search & Zero-Key RAG Tooling (`chassis-tools-websearch`)**: Free, zero-API-key web search engine adapter querying DuckDuckGo and Wikipedia Public APIs with strict host filtering and offline fallback simulation.
 * 🤖 **Autonomous ReAct Agent Orchestrator (`chassis-orchestrator`)**: Sovereign agent manager plugin coordinating multi-step reasoning, tool dispatch, and observation trajectories with zero ambient authority. Communicates bidirectionally with the microkernel via attenuated JSON-RPC 2.0 NDJSON.
 
 ---
@@ -44,6 +45,7 @@ ai-garage/
 │   └── plugins/
 │       ├── chassis-model-local/      # Local model adapter (OpenAI-compatible / llama-server)
 │       ├── chassis-tools-filesystem/ # Sandboxed workspace filesystem provider
+│       ├── chassis-tools-websearch/  # Sovereign zero-key web search & page fetching provider
 │       ├── chassis-storage-sqlite/   # Sovereign libSQL conversation & vector memory plugin
 │       └── chassis-orchestrator/     # Sovereign ReAct agent orchestrator & goal loop
 ├── docs/
@@ -145,7 +147,7 @@ make ready
 ```
 
 1. **Build Gate**: Checks compilation across all workspace crates and targets.
-2. **Test Gate**: Runs 42 unit, integration, and stress tests.
+2. **Test Gate**: Runs 47 unit, integration, and stress tests.
 3. **Lint Gate**: Strict Clippy analysis (`-D warnings`).
 4. **Security Audit Gate**: Scans all 221 crate dependencies against the [RustSec Advisory Database](https://rustsec.org/) (Snyk equivalent) for known CVEs.
 

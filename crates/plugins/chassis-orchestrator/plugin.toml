@@ -28,3 +28,7 @@ optional = false
 [[capabilities_required]]
 id = "storage.conversation"
 optional = true
+
+[[capabilities_required]]
+id = "tools.search"
+optional = true

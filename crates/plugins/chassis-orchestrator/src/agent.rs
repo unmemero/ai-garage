@@ -216,11 +216,34 @@ impl AgentOrchestrator {
 
             // 3. Fallback / simulated goal planner (when model produces plain text / simulation mock)
             if step_idx == 1 {
-                let thought = "Inspecting workspace files to orient and gather context.".to_string();
-                let action = Action {
-                    capability: "tools.execute".to_string(),
-                    method: "list_dir".to_string(),
-                    payload: json!({ "path": "." }),
+                let goal_lower = goal.to_lowercase();
+                let is_search = goal_lower.contains("search")
+                    || goal_lower.contains("find out")
+                    || goal_lower.contains("research")
+                    || goal_lower.contains("lookup")
+                    || goal_lower.contains("who is")
+                    || goal_lower.contains("what is")
+                    || goal_lower.contains("rag")
+                    || goal_lower.contains("web");
+
+                let (thought, action) = if is_search {
+                    (
+                        "Searching for external knowledge and RAG context.".to_string(),
+                        Action {
+                            capability: "tools.search".to_string(),
+                            method: "web_search".to_string(),
+                            payload: json!({ "query": goal, "max_results": 3 }),
+                        },
+                    )
+                } else {
+                    (
+                        "Inspecting workspace files to orient and gather context.".to_string(),
+                        Action {
+                            capability: "tools.execute".to_string(),
+                            method: "list_dir".to_string(),
+                            payload: json!({ "path": "." }),
+                        },
+                    )
                 };
 
                 let obs = match self
@@ -374,6 +397,8 @@ Available tools:
 - tools.execute:file_read {"path": "..."}
 - tools.execute:file_write {"path": "...", "content": "..."}
 - tools.execute:list_dir {"path": "..."}
+- tools.search:web_search {"query": "..."}
+- tools.search:fetch_page {"url": "..."}
 
 Format your response strictly as:
 Thought: <your step-by-step reasoning>

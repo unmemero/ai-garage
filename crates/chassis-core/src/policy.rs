@@ -77,15 +77,38 @@ impl Default for WorkspacePolicy {
     }
 }
 
+fn default_global_allowed_domains() -> Vec<String> {
+    vec![
+        "localhost".into(),
+        "127.0.0.1".into(),
+        "0.0.0.0".into(),
+        "api.duckduckgo.com".into(),
+        "html.duckduckgo.com".into(),
+        "duckduckgo.com".into(),
+        "en.wikipedia.org".into(),
+        "wikipedia.org".into(),
+    ]
+}
+
 /// Network firewall policy `[network]`
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NetworkPolicy {
     #[serde(default)]
     pub mode: NetworkMode,
-    #[serde(default)]
+    #[serde(default = "default_global_allowed_domains")]
     pub global_allowed_domains: Vec<String>,
     #[serde(default)]
     pub blacklisted_domains: Vec<String>,
+}
+
+impl Default for NetworkPolicy {
+    fn default() -> Self {
+        Self {
+            mode: NetworkMode::default(),
+            global_allowed_domains: default_global_allowed_domains(),
+            blacklisted_domains: Vec::new(),
+        }
+    }
 }
 
 /// Human-in-the-Loop policy `[human_in_the_loop]`

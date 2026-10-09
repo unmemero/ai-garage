@@ -1,0 +1,20 @@
+[package]
+name = "chassis-tools-websearch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Free web search and information retrieval tool plugin for Chassis RAG workflows"
+
+[dependencies]
+chassis-protocol = { path = "../../chassis-protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
+
+[dev-dependencies]
+chassis-core = { path = "../../chassis-core" }
+tempfile = "3.17"
