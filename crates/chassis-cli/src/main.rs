@@ -1,3 +1,5 @@
+mod ui_server;
+
 use chassis_core::{
     init_subreaper, BlobStore, CapabilityRouter, EncryptedVault, ExecutionMode, PluginLockfile,
     PluginManifest, PluginSupervisor, SecurityPolicy, WalReader, WalWriter,
@@ -11,6 +13,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
+use ui_server::{PluginCapabilityInfo, PluginInfo, PluginPermissionsInfo, UiState};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -101,6 +105,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
             cmd_status(&workspace)?;
         }
+        "ui" => {
+            let mut workspace = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let mut port: u16 = 3000;
+            let mut host = "127.0.0.1".to_string();
+
+            let mut i = 2;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--workspace" | "-w" if i + 1 < args.len() => {
+                        workspace = PathBuf::from(&args[i + 1]);
+                        i += 1;
+                    }
+                    "--port" | "-p" if i + 1 < args.len() => {
+                        port = args[i + 1].parse().unwrap_or(3000);
+                        i += 1;
+                    }
+                    "--host" if i + 1 < args.len() => {
+                        host = args[i + 1].clone();
+                        i += 1;
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+
+            cmd_ui(&workspace, &host, port).await?;
+        }
         "secret" => {
             cmd_secret(&args[2..])?;
         }
@@ -128,6 +159,7 @@ USAGE:
 COMMANDS:
     init [PATH]                   Initialize .chassis workspace structure
     run [OPTIONS]                 Boot microkernel and run agent loop
+    ui [OPTIONS]                  Launch sovereign local web dashboard (http://127.0.0.1:3000)
     goal <GOAL> [OPTIONS]         Execute an autonomous goal using ReAct orchestrator
     replay <SESSION_OR_FILE>      Replay and verify cryptographically chained WAL session
     status [PATH]                 Check status of workspace and active sessions
@@ -141,6 +173,8 @@ SECRET SUBCOMMANDS:
 
 OPTIONS:
     -w, --workspace <PATH>        Specify workspace directory (default: current directory)
+    -p, --port <PORT>             Port for web dashboard (default: 3000)
+    --host <HOST>                 Host for web dashboard (default: 127.0.0.1)
     --non-interactive             Run without interactive prompts (fail on permission demand)
 "#,
         env!("CARGO_PKG_VERSION")
@@ -658,3 +692,157 @@ fn cmd_status(workspace: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+async fn cmd_ui(
+    workspace: &Path,
+    host: &str,
+    port: u16,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("⚡ Booting Chassis sovereign microkernel for Web Dashboard...");
+    let chassis_dir = workspace.join(".chassis");
+    if !chassis_dir.exists() {
+        eprintln!(
+            "Error: .chassis directory not found in {}. Run 'chassis init' first.",
+            workspace.display()
+        );
+        std::process::exit(1);
+    }
+
+    let policy_path = chassis_dir.join("security_policy.toml");
+    let policy = if policy_path.exists() {
+        let policy_str = fs::read_to_string(&policy_path)?;
+        SecurityPolicy::from_toml(&policy_str)?
+    } else {
+        let mut p = SecurityPolicy::default();
+        p.workspace.root = workspace.to_path_buf();
+        p
+    };
+
+    let vault_path = get_vault_path(workspace);
+    let unlocked_vault = if vault_path.exists() {
+        if let Ok(pass) = get_vault_passphrase() {
+            EncryptedVault::load_from_file(&vault_path, &pass).ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let session_id = format!("ses_ui_{}", Utc::now().format("%Y%m%d_%H%M%S"));
+    let sessions_dir = chassis_dir.join("sessions");
+    let mut wal = WalWriter::init(&session_id, &sessions_dir)?;
+    wal.append(
+        "SESSION_START",
+        json!({
+            "workspace": workspace.display().to_string(),
+            "mode": "web_ui"
+        }),
+    )?;
+    let wal_path = sessions_dir.join(format!("{}.jsonl", session_id));
+
+    let blobs_dir = chassis_dir.join("blobs");
+    let blob_store = BlobStore::new(&blobs_dir)?;
+    let router = Arc::new(CapabilityRouter::new(
+        policy.clone(),
+        workspace,
+        blob_store,
+        ExecutionMode::Interactive,
+        None,
+    ));
+    let reverse_channel = router.create_reverse_channel();
+
+    let mut plugins_to_boot = Vec::new();
+    let search_roots = [
+        workspace.join("crates/plugins"),
+        chassis_dir.join("plugins"),
+    ];
+
+    for root in &search_roots {
+        if let Ok(entries) = fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let manifest_cand = entry.path().join("plugin.toml");
+                if manifest_cand.is_file() && !plugins_to_boot.contains(&manifest_cand) {
+                    plugins_to_boot.push(manifest_cand);
+                }
+            }
+        }
+    }
+
+    let mut plugin_infos = Vec::new();
+
+    for manifest_path in &plugins_to_boot {
+        let manifest_content = fs::read_to_string(manifest_path)?;
+        let manifest = PluginManifest::from_toml(&manifest_content)?;
+        let plugin_id = manifest.plugin.id.clone();
+        let plugin_version = manifest.plugin.version.clone();
+        let plugin_dir = manifest_path.parent().unwrap_or(workspace);
+
+        let caps_offered: Vec<PluginCapabilityInfo> = manifest
+            .capabilities_offered
+            .iter()
+            .map(|c| PluginCapabilityInfo {
+                id: c.id.clone(),
+                methods: c.methods.clone(),
+            })
+            .collect();
+
+        let perms = PluginPermissionsInfo {
+            network: manifest.permissions.network.allow_outbound
+                || !manifest.permissions.network.allowed_domains.is_empty(),
+            filesystem: !manifest.permissions.filesystem.read_scopes.is_empty()
+                || !manifest.permissions.filesystem.write_scopes.is_empty(),
+        };
+
+        match PluginSupervisor::launch_and_handshake_full(
+            manifest,
+            &policy,
+            workspace,
+            plugin_dir,
+            &session_id,
+            Duration::from_secs(5),
+            unlocked_vault.as_ref(),
+            Some(reverse_channel.clone()),
+        )
+        .await
+        {
+            Ok(supervisor) => {
+                router.register_plugin(supervisor).await;
+                wal.append(
+                    "PLUGIN_BOOTED",
+                    json!({
+                        "plugin_id": plugin_id,
+                        "capabilities": caps_offered.iter().map(|c| &c.id).collect::<Vec<_>>()
+                    }),
+                )?;
+                plugin_infos.push(PluginInfo {
+                    id: plugin_id,
+                    version: plugin_version,
+                    mode: "Isolated Process (Subreaper)".to_string(),
+                    capabilities_offered: caps_offered,
+                    permissions: perms,
+                });
+            }
+            Err(e) => {
+                eprintln!("   ⚠️ Failed to launch plugin {plugin_id}: {e}");
+            }
+        }
+    }
+
+    println!("✅ Microkernel ready: {} plugins online.", plugin_infos.len());
+
+    let (tx_events, _) = broadcast::channel(200);
+
+    let state = UiState {
+        workspace: workspace.to_path_buf(),
+        session_id,
+        router,
+        wal_path,
+        plugins: plugin_infos,
+        tx_events,
+    };
+
+    ui_server::start_ui_server(state, host, port).await?;
+    Ok(())
+}
+

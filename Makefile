@@ -2,7 +2,7 @@
 # Chassis AI Microkernel - Automation & Deployment Readiness Makefile
 # ==============================================================================
 
-.PHONY: all build build-release run test lint audit ready clean help
+.PHONY: all build build-release run ui test lint audit ready clean help
 
 # Colors for terminal output
 GREEN  := \033[1;32m
@@ -17,6 +17,7 @@ help:
 	@echo "  $(GREEN)make build$(RESET)           Compile the workspace (debug profile)"
 	@echo "  $(GREEN)make build-release$(RESET)   Compile the workspace with release optimizations"
 	@echo "  $(GREEN)make run$(RESET)             Run the Chassis CLI binary"
+	@echo "  $(GREEN)make ui$(RESET)              Launch sovereign web dashboard on http://127.0.0.1:3000"
 	@echo "  $(GREEN)make test$(RESET)            Run all unit and integration tests across workspace"
 	@echo "  $(GREEN)make lint$(RESET)            Run clippy static analysis with warnings as errors"
 	@echo "  $(GREEN)make audit$(RESET)           Run RustSec vulnerability scanner (Snyk equivalent)"
@@ -36,6 +37,10 @@ build-release:
 run:
 	@echo "$(YELLOW)--> Running Chassis CLI...$(RESET)"
 	cargo run -p chassis-cli
+
+ui:
+	@echo "$(YELLOW)--> Launching Chassis Sovereign Web Dashboard...$(RESET)"
+	cargo run -p chassis-cli -- ui
 
 ## 3. Testing
 test:

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chassis Sovereign AI Microkernel Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header Bar -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">CHASSIS</h1>
+          <span class="brand-subtitle">Zero-Trust AI Microkernel</span>
+        </div>
+      </div>
+
+      <div class="header-status-group">
+        <div class="status-badge" id="badge-connection">
+          <span class="status-dot pulse-green"></span>
+          <span id="text-connection">Kernel Connected</span>
+        </div>
+        <div class="status-pill" id="badge-session">
+          <span class="pill-label">SESSION:</span>
+          <span class="pill-value font-mono" id="text-session-id">Loading...</span>
+        </div>
+        <div class="status-pill" id="badge-wal-hash">
+          <span class="pill-label">FORWARD HASH:</span>
+          <span class="pill-value font-mono" id="text-wal-hash">00000000...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Navigation Bar -->
+    <nav class="nav-bar">
+      <button class="nav-tab active" data-tab="tab-chat" id="btn-tab-chat">
+        <span class="tab-icon">💬</span>
+        <span>Agent & ReAct Trace</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-rag" id="btn-tab-rag">
+        <span class="tab-icon">🌐</span>
+        <span>RAG & Web Search</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-wal" id="btn-tab-wal">
+        <span class="tab-icon">📜</span>
+        <span>Cryptographic WAL</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-plugins" id="btn-tab-plugins">
+        <span class="tab-icon">🔌</span>
+        <span>Plugin Matrix</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-memory" id="btn-tab-memory">
+        <span class="tab-icon">🧠</span>
+        <span>Vector Memory</span>
+      </button>
+    </nav>
+
+    <!-- Main View Content Container -->
+    <main class="main-container">
+
+      <!-- TAB 1: Live Agent Chat & ReAct Trace -->
+      <section class="tab-pane active" id="tab-chat">
+        <div class="chat-workspace">
+          <!-- Chat / Goal Stream Feed -->
+          <div class="chat-stream-panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <h2 class="panel-title">Sovereign Agent Trajectory</h2>
+                <span class="badge-accent" id="badge-agent-state">Idle</span>
+              </div>
+              <button class="btn-ghost" id="btn-clear-chat" title="Clear current trajectory">Clear Stream</button>
+            </div>
+
+            <div class="chat-messages" id="chat-messages-container">
+              <div class="system-welcome-card">
+                <div class="card-icon">🛡️</div>
+                <div class="card-content">
+                  <h3>Microkernel Ready for Sovereign Goals</h3>
+                  <p>All plugins run in isolated processes with zero ambient authority. Send an instruction or goal below to watch the ReAct reasoning trajectory, tool invocations, and observations in real time.</p>
+                  <div class="quick-prompts">
+                    <button class="quick-prompt-btn" data-prompt="Search the web for Rust Tokio async runtime documentation and summarize its main features">🔎 Search Tokio Docs</button>
+                    <button class="quick-prompt-btn" data-prompt="Inspect workspace files and report project status">📂 Inspect Workspace</button>
+                    <button class="quick-prompt-btn" data-prompt="Search the web for libSQL vector search syntax and explain how it works">🧠 Research libSQL Vector Index</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Input Area -->
+            <form class="chat-input-bar" id="form-chat">
+              <input type="text" id="input-goal" class="chat-input" placeholder="Type a sovereign goal or prompt (e.g., 'Search for latest Rust 1.85 features')..." autocomplete="off" required>
+              <button type="submit" class="btn-primary" id="btn-dispatch-goal">
+                <span id="btn-goal-text">Execute Goal</span>
+                <span class="spinner hidden" id="spinner-goal"></span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Live Step Inspector Sidebar -->
+          <aside class="trace-inspector-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Live Step Inspector</h3>
+              <span class="text-muted" id="text-trace-count">0 steps</span>
+            </div>
+            <div class="trace-steps-list" id="trace-steps-container">
+              <div class="empty-placeholder">
+                <span class="placeholder-icon">⚡</span>
+                <p>Waiting for agent reasoning...</p>
+                <small>ReAct thoughts, actions, and observations will populate here live.</small>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- TAB 2: RAG & Web Search Explorer -->
+      <section class="tab-pane" id="tab-rag">
+        <div class="rag-workspace">
+          <div class="card-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Zero-API-Key Web Search & RAG Tool</h2>
+              <span class="badge-success">DuckDuckGo & Wikipedia Active</span>
+            </div>
+            <p class="panel-desc">Test the sovereign <code>tools.search</code> capability directly. Microkernel enforces network domain whitelist and sandboxes the search process.</p>
+
+            <form class="rag-search-bar" id="form-rag-search">
+              <input type="text" id="input-rag-query" class="chat-input" placeholder="Enter query (e.g., 'Rust programming language' or 'libSQL vector search')..." required>
+              <button type="submit" class="btn-primary" id="btn-rag-submit">Search Web</button>
+            </form>
+
+            <div class="rag-results-container" id="rag-results-container">
+              <div class="empty-placeholder">
+                <span class="placeholder-icon">🔎</span>
+                <p>Enter a query above to query DuckDuckGo and Wikipedia.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: Cryptographic WAL & Audit Viewer -->
+      <section class="tab-pane" id="tab-wal">
+        <div class="wal-workspace">
+          <div class="wal-header-stats">
+            <div class="stat-card">
+              <span class="stat-label">Chain Status</span>
+              <span class="stat-val status-green" id="stat-wal-integrity">✓ Chain Verified</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Total Events</span>
+              <span class="stat-val" id="stat-wal-events">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Current Forward Hash</span>
+              <span class="stat-val font-mono truncate" id="stat-wal-latest-hash">Genesis</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Action</span>
+              <button class="btn-secondary" id="btn-refresh-wal">Re-verify Ledger</button>
+            </div>
+          </div>
+
+          <div class="table-container card-panel">
+            <table class="data-table" id="table-wal">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Seq</th>
+                  <th style="width: 180px;">Timestamp</th>
+                  <th style="width: 160px;">Event Type</th>
+                  <th>Payload Data</th>
+                  <th style="width: 220px;">SHA-256 Hash</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-wal">
+                <tr><td colspan="5" class="text-center">Loading WAL audit entries...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: Plugin & Capability Matrix -->
+      <section class="tab-pane" id="tab-plugins">
+        <div class="plugins-workspace">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Isolated Plugin Runtimes</h2>
+              <p class="panel-desc">All processes execute with scrubbed ambient environment variables and mathematically attenuated capabilities.</p>
+            </div>
+            <button class="btn-secondary" id="btn-refresh-plugins">Refresh Matrix</button>
+          </div>
+
+          <div class="plugins-grid" id="plugins-grid-container">
+            <div class="empty-placeholder"><p>Loading plugin manifests...</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: Conversation History & Vector Search -->
+      <section class="tab-pane" id="tab-memory">
+        <div class="memory-workspace">
+          <div class="split-memory-layout">
+            <!-- Left: Conversation Threads -->
+            <div class="card-panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Stored Conversations (libSQL)</h3>
+                <span class="badge-accent" id="badge-conv-count">0</span>
+              </div>
+              <div class="conversations-list" id="conv-list-container">
+                <div class="empty-placeholder"><p>No conversation sessions found.</p></div>
+              </div>
+            </div>
+
+            <!-- Right: Semantic Vector Search Simulator -->
+            <div class="card-panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Semantic Vector Search</h3>
+                <span class="badge-success">Cosine ANN Simulator</span>
+              </div>
+              <p class="panel-desc">Simulate libSQL <code>vector_top_k</code> approximate nearest neighbor queries over stored message embeddings.</p>
+
+              <form class="vector-search-bar" id="form-vector-search">
+                <input type="text" id="input-vector-query" class="chat-input" placeholder="Search memory (e.g. 'previous findings on Tokio')..." required>
+                <button type="submit" class="btn-primary" id="btn-vector-submit">Query Vectors</button>
+              </form>
+
+              <div class="vector-results-list" id="vector-results-container">
+                <div class="empty-placeholder"><p>Enter a search phrase to query semantic memory.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

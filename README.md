@@ -123,6 +123,17 @@ chassis run --workspace /path/to/workspace
 chassis run --workspace /path/to/workspace --non-interactive
 ```
 
+### Launch the Sovereign Web Dashboard
+Starts the local asynchronous web dashboard with real-time ReAct trace streaming, cryptographic WAL inspection, zero-key RAG search, and plugin capability matrix:
+```bash
+# Via CLI
+chassis ui --workspace /path/to/workspace --port 3000
+
+# Or via Makefile
+make ui
+```
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000) in your browser.
+
 ### Execute Autonomous ReAct Goals
 Coordinates multi-step reasoning, tool dispatch, and observation trajectories via the orchestrator:
 ```bash
@@ -147,7 +158,7 @@ make ready
 ```
 
 1. **Build Gate**: Checks compilation across all workspace crates and targets.
-2. **Test Gate**: Runs 47 unit, integration, and stress tests.
+2. **Test Gate**: Runs 49 unit, integration, and stress tests.
 3. **Lint Gate**: Strict Clippy analysis (`-D warnings`).
 4. **Security Audit Gate**: Scans all 221 crate dependencies against the [RustSec Advisory Database](https://rustsec.org/) (Snyk equivalent) for known CVEs.
 
