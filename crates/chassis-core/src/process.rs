@@ -11,6 +11,14 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 
+/// Reverse capability invocation request emitted by a child plugin
+#[derive(Debug)]
+pub struct ReverseCall {
+    pub caller_id: String,
+    pub request: Request,
+    pub response_tx: oneshot::Sender<Response>,
+}
+
 /// A supervised plugin process with multiplexed asynchronous stdio transport
 pub struct ProcessHandle {
     pub plugin_id: String,
@@ -30,6 +38,17 @@ impl ProcessHandle {
         workspace_root: &Path,
         plugin_dir: &Path,
     ) -> Result<Self, CoreError> {
+        Self::spawn_with_reverse_channel(manifest, lease, workspace_root, plugin_dir, None)
+    }
+
+    /// Spawn an isolated plugin child process with an optional reverse channel for bidirectional kernel calls
+    pub fn spawn_with_reverse_channel(
+        manifest: &PluginManifest,
+        lease: &EffectiveLease,
+        workspace_root: &Path,
+        plugin_dir: &Path,
+        reverse_channel: Option<mpsc::Sender<ReverseCall>>,
+    ) -> Result<Self, CoreError> {
         let exec_path = if manifest.entrypoint.executable.is_absolute() {
             manifest.entrypoint.executable.clone()
         } else {
@@ -43,6 +62,19 @@ impl ProcessHandle {
                     target_debug
                 } else if target_release.exists() {
                     target_release
+                } else if let Ok(current_exe) = std::env::current_exe() {
+                    let mut cand = None;
+                    if let Some(target_dir) = current_exe.parent().and_then(|p| p.parent()) {
+                        let path = target_dir.join(file_name);
+                        if path.exists() {
+                            cand = Some(path);
+                        }
+                    }
+                    if let Some(p) = cand {
+                        p
+                    } else {
+                        direct
+                    }
                 } else {
                     direct
                 }
@@ -131,10 +163,12 @@ impl ProcessHandle {
             }
         });
 
-        // Stdout Reader Task: Multiplexed line reader routing responses and notifications
+        // Stdout Reader Task: Multiplexed line reader routing responses, notifications, and reverse requests
         let pending_clone = Arc::clone(&pending_requests);
         let notif_tx_clone = notification_tx.clone();
         let plugin_id_str = manifest.plugin.id.clone();
+        let stdin_tx_for_reader = stdin_tx.clone();
+        let rev_tx_opt = reverse_channel;
         tokio::spawn(async move {
             let mut reader = BufReader::new(child_stdout).lines();
             while let Ok(Some(line)) = reader.next_line().await {
@@ -159,11 +193,28 @@ impl ProcessHandle {
                     Ok(Message::Notification(notif)) => {
                         let _ = notif_tx_clone.send(notif);
                     }
-                    Ok(Message::Request(_req)) => {
-                        tracing::debug!(
-                            "[{}] Received reverse request from child process",
-                            plugin_id_str
-                        );
+                    Ok(Message::Request(req)) => {
+                        if let Some(ref rev_tx) = rev_tx_opt {
+                            let (resp_tx, resp_rx) = oneshot::channel();
+                            let rev_call = ReverseCall {
+                                caller_id: plugin_id_str.clone(),
+                                request: req,
+                                response_tx: resp_tx,
+                            };
+                            let stdin_reply_tx = stdin_tx_for_reader.clone();
+                            if rev_tx.send(rev_call).await.is_ok() {
+                                tokio::spawn(async move {
+                                    if let Ok(resp) = resp_rx.await {
+                                        let _ = stdin_reply_tx.send(Message::Response(resp)).await;
+                                    }
+                                });
+                            }
+                        } else {
+                            tracing::debug!(
+                                "[{}] Received reverse request from child process",
+                                plugin_id_str
+                            );
+                        }
                     }
                     Err(e) => {
                         tracing::warn!(

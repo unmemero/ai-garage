@@ -54,6 +54,31 @@ impl PluginSupervisor {
         handshake_timeout: Duration,
         vault: Option<&crate::vault::EncryptedVault>,
     ) -> Result<Self, CoreError> {
+        Self::launch_and_handshake_full(
+            manifest,
+            policy,
+            workspace_root,
+            plugin_dir,
+            session_id,
+            handshake_timeout,
+            vault,
+            None,
+        )
+        .await
+    }
+
+    /// Launch and negotiate capability handshake with vault secret injection and reverse channel
+    #[allow(clippy::too_many_arguments)]
+    pub async fn launch_and_handshake_full(
+        manifest: PluginManifest,
+        policy: &SecurityPolicy,
+        workspace_root: &Path,
+        plugin_dir: &Path,
+        session_id: impl Into<String>,
+        handshake_timeout: Duration,
+        vault: Option<&crate::vault::EncryptedVault>,
+        reverse_channel: Option<tokio::sync::mpsc::Sender<crate::process::ReverseCall>>,
+    ) -> Result<Self, CoreError> {
         let sid = session_id.into();
         let mut lease = EffectiveLease::compute(&manifest, policy, &manifest.plugin.id);
         if let Some(v) = vault {
@@ -67,7 +92,13 @@ impl PluginSupervisor {
             )));
         }
 
-        let process = ProcessHandle::spawn(&manifest, &lease, workspace_root, plugin_dir)?;
+        let process = ProcessHandle::spawn_with_reverse_channel(
+            &manifest,
+            &lease,
+            workspace_root,
+            plugin_dir,
+            reverse_channel,
+        )?;
         let mut lifo = LifoStack::new();
 
         // Handshake Stage 1: Send kernel/handshake request

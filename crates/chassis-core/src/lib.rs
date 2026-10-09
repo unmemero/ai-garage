@@ -24,7 +24,7 @@ pub use lifo::{CleanupGuard, LifoStack};
 pub use lockfile::{LockedPlugin, PluginLockfile};
 pub use manifest::PluginManifest;
 pub use policy::SecurityPolicy;
-pub use process::{collect_descendants, kill_process_tree, ProcessHandle};
+pub use process::{collect_descendants, kill_process_tree, ProcessHandle, ReverseCall};
 pub use router::{CapabilityRouter, ExecutionMode};
 pub use subagent::{SubAgentManager, SubAgentResult, SubAgentSpawnRequest};
 pub use supervisor::PluginSupervisor;

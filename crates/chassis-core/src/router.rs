@@ -2,6 +2,7 @@ use crate::attenuation::EffectiveLease;
 use crate::blob::BlobStore;
 use crate::error::CoreError;
 use crate::policy::SecurityPolicy;
+use crate::process::ReverseCall;
 use crate::supervisor::PluginSupervisor;
 use crate::wal::{WalWriter, EVENT_CAPABILITY_CHECK, EVENT_TOOL_END, EVENT_TOOL_START};
 use chassis_protocol::envelope::InvokeRequest;
@@ -10,7 +11,7 @@ use chassis_protocol::Response;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 /// Execution mode for headless and interactive environments
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -99,6 +100,27 @@ impl CapabilityRouter {
         let provider = plugins.get(&target_plugin_id).ok_or_else(|| {
             CoreError::PolicyViolation(format!("Target plugin '{}' not found", target_plugin_id))
         })?;
+
+        // 1b. Zero Ambient Authority Check: If caller is a registered plugin,
+        // it must have explicitly declared this capability in [[capabilities_required]].
+        if caller_id != "cli" && caller_id != "agent_core" {
+            if let Some(caller_sup) = plugins.get(caller_id) {
+                let required = &caller_sup.manifest.capabilities_required;
+                let authorized = required.iter().any(|r| r.id == request.capability);
+                if !authorized {
+                    return Ok(Response::error(
+                        request.call_id.clone(),
+                        RpcError::new(
+                            CAPABILITY_NOT_FOUND,
+                            format!(
+                                "Plugin '{}' attempted to invoke capability '{}' without declaring it in [[capabilities_required]]",
+                                caller_id, request.capability
+                            ),
+                        ),
+                    ));
+                }
+            }
+        }
 
         // 2. Capability Broker Firewall Gate: Inspect parameters against EffectiveLease
         let lease = &provider.lease;
@@ -248,5 +270,63 @@ impl CapabilityRouter {
 
     pub fn mode(&self) -> ExecutionMode {
         self.mode
+    }
+
+    /// Create a bidirectional reverse call channel for child plugins to dispatch through the router
+    pub fn create_reverse_channel(self: &Arc<Self>) -> mpsc::Sender<ReverseCall> {
+        let (tx, mut rx) = mpsc::channel::<ReverseCall>(128);
+        let router = Arc::clone(self);
+        tokio::spawn(async move {
+            while let Some(call) = rx.recv().await {
+                let r = Arc::clone(&router);
+                tokio::spawn(async move {
+                    let resp = r.handle_reverse_request(&call.caller_id, call.request).await;
+                    let _ = call.response_tx.send(resp);
+                });
+            }
+        });
+        tx
+    }
+
+    /// Process an incoming reverse JSON-RPC request from a supervised plugin
+    pub async fn handle_reverse_request(
+        &self,
+        caller_id: &str,
+        req: chassis_protocol::Request,
+    ) -> Response {
+        if req.method == chassis_protocol::METHOD_CAPABILITY_INVOKE {
+            let invoke_req: Result<InvokeRequest, _> = match req.params {
+                Some(val) => serde_json::from_value(val),
+                None => Err(serde::de::Error::custom("Missing params")),
+            };
+
+            match invoke_req {
+                Ok(mut invoke) => {
+                    if invoke.call_id.is_empty() {
+                        invoke.call_id = req.id.to_string();
+                    }
+                    match self.dispatch(caller_id, invoke).await {
+                        Ok(mut resp) => {
+                            resp.id = req.id;
+                            resp
+                        }
+                        Err(e) => {
+                            Response::error(req.id, RpcError::internal_error(e.to_string()))
+                        }
+                    }
+                }
+                Err(e) => {
+                    Response::error(
+                        req.id,
+                        RpcError::invalid_params(format!("Invalid InvokeRequest: {}", e)),
+                    )
+                }
+            }
+        } else {
+            Response::error(
+                req.id,
+                RpcError::method_not_found(format!("Unknown kernel method '{}'", req.method)),
+            )
+        }
     }
 }

@@ -1,0 +1,30 @@
+[plugin]
+id = "chassis.agent.orchestrator"
+name = "ReAct Agent Orchestrator"
+version = "1.0.0"
+description = "Autonomous ReAct agent loop for multi-step reasoning, tool dispatch, and conversation memory"
+author = "Sovereign AI Core Team"
+license = "MIT"
+
+[entrypoint]
+runtime = "native"
+executable = "./chassis-orchestrator"
+args = []
+env_passthrough = []
+
+[[capabilities_offered]]
+id = "agent.orchestrate"
+version = "1.0.0"
+methods = ["run_goal", "chat_turn"]
+
+[[capabilities_required]]
+id = "model.generate"
+optional = false
+
+[[capabilities_required]]
+id = "tools.execute"
+optional = false
+
+[[capabilities_required]]
+id = "storage.conversation"
+optional = true

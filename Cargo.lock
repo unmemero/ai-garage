@@ -198,6 +198,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "chassis-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "chassis-core",
+ "chassis-protocol",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "chassis-protocol"
 version = "0.1.0"
 dependencies = [

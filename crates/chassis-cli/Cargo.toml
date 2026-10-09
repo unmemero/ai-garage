@@ -6,6 +6,10 @@ license.workspace = true
 authors.workspace = true
 description = "Command-line interface and daemon runner for the Chassis microkernel"
 
+[[bin]]
+name = "chassis"
+path = "src/main.rs"
+
 [dependencies]
 chassis-protocol = { path = "../chassis-protocol" }
 chassis-core = { path = "../chassis-core" }

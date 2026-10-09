@@ -7,6 +7,7 @@ members = [
     "crates/plugins/chassis-model-local",
     "crates/plugins/chassis-tools-filesystem",
     "crates/plugins/chassis-storage-sqlite",
+    "crates/plugins/chassis-orchestrator",
 ]
 
 [workspace.package]

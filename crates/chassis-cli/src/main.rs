@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::main]
@@ -49,7 +50,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 i += 1;
             }
 
-            cmd_run(&workspace, non_interactive).await?;
+            cmd_run(&workspace, non_interactive, None).await?;
+        }
+        "goal" => {
+            if args.len() < 3 {
+                eprintln!("Usage: chassis goal <GOAL_TEXT> [--workspace <DIR>] [--non-interactive]");
+                std::process::exit(1);
+            }
+            let goal_text = args[2].clone();
+            let mut workspace = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let mut non_interactive = false;
+
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--workspace" | "-w" => {
+                        if i + 1 < args.len() {
+                            workspace = PathBuf::from(&args[i + 1]);
+                            i += 1;
+                        }
+                    }
+                    "--non-interactive" => {
+                        non_interactive = true;
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+
+            cmd_run(&workspace, non_interactive, Some(goal_text)).await?;
         }
         "replay" => {
             if args.len() < 3 {
@@ -99,6 +128,7 @@ USAGE:
 COMMANDS:
     init [PATH]                   Initialize .chassis workspace structure
     run [OPTIONS]                 Boot microkernel and run agent loop
+    goal <GOAL> [OPTIONS]         Execute an autonomous goal using ReAct orchestrator
     replay <SESSION_OR_FILE>      Replay and verify cryptographically chained WAL session
     status [PATH]                 Check status of workspace and active sessions
     secret <SUBCOMMAND>           Manage AES-256-GCM encrypted credentials vault
@@ -282,7 +312,11 @@ fn cmd_secret(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_run(
+    workspace: &Path,
+    non_interactive: bool,
+    custom_goal: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("⚡ Booting Chassis sovereign microkernel...");
     let chassis_dir = workspace.join(".chassis");
     if !chassis_dir.exists() {
@@ -335,7 +369,8 @@ async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn 
         ExecutionMode::Interactive
     };
 
-    let router = CapabilityRouter::new(policy.clone(), workspace, blob_store, exec_mode, None);
+    let router = Arc::new(CapabilityRouter::new(policy.clone(), workspace, blob_store, exec_mode, None));
+    let reverse_channel = router.create_reverse_channel();
 
     // Dynamically locate plugin manifests across:
     // 1. In-tree development plugins: <workspace>/crates/plugins/*/plugin.toml
@@ -367,7 +402,7 @@ async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn 
         let plugin_dir = manifest_path.parent().unwrap_or(workspace);
 
         println!("🔌 Booting plugin: {plugin_id} (v{})", manifest.plugin.version);
-        match PluginSupervisor::launch_and_handshake_with_vault(
+        match PluginSupervisor::launch_and_handshake_full(
             manifest,
             &policy,
             workspace,
@@ -375,6 +410,7 @@ async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn 
             &session_id,
             Duration::from_secs(5),
             unlocked_vault.as_ref(),
+            Some(reverse_channel.clone()),
         )
         .await
         {
@@ -401,68 +437,134 @@ async fn cmd_run(workspace: &Path, non_interactive: bool) -> Result<(), Box<dyn 
 
     println!("✅ Boot complete: {booted_count} plugins online and verified.");
 
-    // Demonstration run: invoke model and filesystem capability through capability router
-    println!("\n🤖 Executing self-test capability dispatch...");
+    if let Some(goal) = custom_goal {
+        println!("\n🧠 Dispatching ReAct Agent Goal: \"{}\"", goal);
+        let orch_req = InvokeRequest::new(
+            "req_goal_custom",
+            "agent.orchestrate",
+            "run_goal",
+            json!({
+                "goal": goal,
+                "max_steps": 5,
+                "conversation_id": format!("conv_{session_id}")
+            }),
+        );
 
-    // 1. Model generation invocation
-    let model_req = InvokeRequest::new(
-        "req_model_001",
-        "model.generate",
-        "generate",
-        json!({
-            "messages": [
-                { "role": "system", "content": "You are Chassis AI sovereign kernel." },
-                { "role": "user", "content": "Hello sovereign agent" }
-            ]
-        }),
-    );
+        wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "agent.orchestrate", "method": "run_goal" }))?;
+        let orch_resp = router.dispatch("agent_core", orch_req).await?;
+        wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": orch_resp }))?;
 
-    wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "model.generate", "method": "generate" }))?;
-    let model_resp = router.dispatch("agent_core", model_req).await?;
-    wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": model_resp }))?;
-    if let Some(err) = model_resp.error {
-        println!("   ❌ Model generation error: {}", err.message);
+        if let Some(err) = orch_resp.error {
+            println!("   ❌ Agent execution error: {}", err.message);
+        } else if let Some(res) = orch_resp.result {
+            println!("\n🎯 Agent execution completed successfully!");
+            if let Some(final_ans) = res.get("final_answer").and_then(|a| a.as_str()) {
+                println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                println!("🏁 Final Answer:\n{}", final_ans);
+                println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            }
+            if let Some(steps) = res.get("history").and_then(|h| h.as_array()) {
+                println!("\n📋 Trajectory steps ({}):", steps.len());
+                for s in steps {
+                    let step_num = s.get("step").and_then(|n| n.as_u64()).unwrap_or(0);
+                    let thought = s.get("thought").and_then(|t| t.as_str()).unwrap_or("");
+                    println!("  [Step {}] Thought: {}", step_num, thought);
+                    if let Some(act) = s.get("action") {
+                        let cap = act.get("capability").and_then(|c| c.as_str()).unwrap_or("");
+                        let method = act.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                        println!("           Action: {}:{}", cap, method);
+                    }
+                    if let Some(obs) = s.get("observation") {
+                        println!("           Observation: {}", obs);
+                    }
+                }
+            }
+        }
     } else {
-        println!("   ✓ Model generation response received: {}", model_resp.result.unwrap_or_default());
-    }
+        // Demonstration self-test runs
+        println!("\n🤖 Executing self-test capability dispatch...");
 
-    // 2. Directory listing invocation
-    let fs_req = InvokeRequest::new(
-        "req_fs_001",
-        "tools.execute",
-        "list_dir",
-        json!({ "path": "." }),
-    );
+        // 1. Model generation invocation
+        let model_req = InvokeRequest::new(
+            "req_model_001",
+            "model.generate",
+            "generate",
+            json!({
+                "messages": [
+                    { "role": "system", "content": "You are Chassis AI sovereign kernel." },
+                    { "role": "user", "content": "Hello sovereign agent" }
+                ]
+            }),
+        );
 
-    wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "tools.execute", "method": "list_dir" }))?;
-    let fs_resp = router.dispatch("agent_core", fs_req).await?;
-    wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": fs_resp }))?;
-    if let Some(err) = fs_resp.error {
-        println!("   ❌ Filesystem tools error: {}", err.message);
-    } else {
-        println!("   ✓ Filesystem tools response received: {}", fs_resp.result.unwrap_or_default());
-    }
+        wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "model.generate", "method": "generate" }))?;
+        let model_resp = router.dispatch("agent_core", model_req).await?;
+        wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": model_resp }))?;
+        if let Some(err) = model_resp.error {
+            println!("   ❌ Model generation error: {}", err.message);
+        } else {
+            println!("   ✓ Model generation response received: {}", model_resp.result.unwrap_or_default());
+        }
 
-    // 3. Storage conversation invocation
-    let storage_req = InvokeRequest::new(
-        "req_storage_001",
-        "storage.conversation",
-        "conversation_create",
-        json!({
-            "id": format!("conv_{session_id}"),
-            "title": "Sovereign E2E Self-Test Session",
-            "model_id": "chassis.model.local",
-            "chassis_session_id": session_id
-        }),
-    );
+        // 2. Directory listing invocation
+        let fs_req = InvokeRequest::new(
+            "req_fs_001",
+            "tools.execute",
+            "list_dir",
+            json!({ "path": "." }),
+        );
 
-    wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "storage.conversation", "method": "conversation_create" }))?;
-    let storage_resp = router.dispatch("agent_core", storage_req).await?;
-    wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": storage_resp }))?;
-    if let Some(err) = storage_resp.error {
-        println!("   ⚠️ Storage conversation status: {}", err.message);
-    } else {
-        println!("   ✓ Storage conversation created: {}", storage_resp.result.unwrap_or_default());
+        wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "tools.execute", "method": "list_dir" }))?;
+        let fs_resp = router.dispatch("agent_core", fs_req).await?;
+        wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": fs_resp }))?;
+        if let Some(err) = fs_resp.error {
+            println!("   ❌ Filesystem tools error: {}", err.message);
+        } else {
+            println!("   ✓ Filesystem tools response received: {}", fs_resp.result.unwrap_or_default());
+        }
+
+        // 3. Storage conversation invocation
+        let storage_req = InvokeRequest::new(
+            "req_storage_001",
+            "storage.conversation",
+            "conversation_create",
+            json!({
+                "id": format!("conv_{session_id}"),
+                "title": "Sovereign E2E Self-Test Session",
+                "model_id": "chassis.model.local",
+                "chassis_session_id": session_id
+            }),
+        );
+
+        wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "storage.conversation", "method": "conversation_create" }))?;
+        let storage_resp = router.dispatch("agent_core", storage_req).await?;
+        wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": storage_resp }))?;
+        if let Some(err) = storage_resp.error {
+            println!("   ⚠️ Storage conversation status: {}", err.message);
+        } else {
+            println!("   ✓ Storage conversation created: {}", storage_resp.result.unwrap_or_default());
+        }
+
+        // 4. Autonomous agent orchestrator invocation
+        let orch_req = InvokeRequest::new(
+            "req_orch_001",
+            "agent.orchestrate",
+            "run_goal",
+            json!({
+                "goal": "Inspect workspace files and report project status",
+                "max_steps": 3,
+                "conversation_id": format!("conv_{session_id}")
+            }),
+        );
+
+        wal.append("CAPABILITY_DISPATCH_START", json!({ "target": "agent.orchestrate", "method": "run_goal" }))?;
+        let orch_resp = router.dispatch("agent_core", orch_req).await?;
+        wal.append("CAPABILITY_DISPATCH_RESULT", json!({ "response": orch_resp }))?;
+        if let Some(err) = orch_resp.error {
+            println!("   ⚠️ Agent orchestrator status: {}", err.message);
+        } else {
+            println!("   ✓ Agent orchestrator goal executed: {}", orch_resp.result.unwrap_or_default());
+        }
     }
 
     wal.append("SESSION_END", json!({ "status": "clean_exit", "booted_plugins": booted_count }))?;

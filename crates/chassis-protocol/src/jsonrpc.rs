@@ -27,6 +27,15 @@ impl From<String> for Id {
     }
 }
 
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Id::Number(n) => write!(f, "{}", n),
+            Id::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 /// A standard JSON-RPC 2.0 Request
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Request {
